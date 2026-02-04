@@ -1,0 +1,18 @@
+body {
+  margin: 0;
+  background: #111;
+  color: white;
+  font-family: sans-serif;
+  text-align: center;
+}
+
+#menu {
+  padding-top: 60px;
+}
+
+canvas {
+  display: none;
+  margin: auto;
+  background: #222;
+  border: 2px solid #555;
+}
