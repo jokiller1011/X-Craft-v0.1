@@ -1,161 +1,70 @@
 // ===== SCENE SETUP =====
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb); // sky blue
+scene.background = new THREE.Color(0x87ceeb);
 
+// ===== MENU =====
+const menu = document.getElementById('menu');
+const startBtn = document.getElementById('start');
+const canvas = document.getElementById('game');
+
+let gameStarted = false;
+
+startBtn.addEventListener('click', () => {
+  menu.style.display = 'none';
+  gameStarted = true;
+  document.body.requestPointerLock();
+});
+
+// ===== CAMERA =====
 const camera = new THREE.PerspectiveCamera(
   75,
-  window.innerWidth / window.innerHeight,
+  canvas.clientWidth / canvas.clientHeight,
   0.1,
   1000
 );
-
 camera.position.set(0, 1.6, 5);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
+// ===== RENDERER =====
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
 renderer.setPixelRatio(window.devicePixelRatio);
-document.body.appendChild(renderer.domElement);
 
 // ===== LIGHTING =====
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
 const dirLight = new THREE.DirectionalLight(0xffffff, 1);
 dirLight.position.set(5, 10, 5);
 scene.add(dirLight);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+// ===== GROUND =====
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100),
+  new THREE.MeshStandardMaterial({ color: 0x3a7d44 })
+);
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
 
-// ===== PLAYER LOAD =====
+// ===== PLAYER =====
 let player;
+
+const loader = new THREE.GLTFLoader();
+loader.load('models/player.glb', (gltf) => {
+  player = gltf.scene;
+  player.scale.set(0.5, 0.5, 0.5);
+  player.position.set(0, 0, 0);
+  scene.add(player);
+});
 
 // ===== PHYSICS =====
 let velocityY = 0;
 const gravity = -0.015;
 const jumpStrength = 0.35;
-const groundY = 0; // ground height
 let isOnGround = false;
-
-const loader = new THREE.GLTFLoader();
-loader.load(
-  'models/player.glb',
-  (gltf) => {
-    player = gltf.scene;
-
-    player.scale.set(0.5, 0.5, 0.5);
-    player.position.set(0, 0, 0);
-
-    player.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-
-    scene.add(player);
-    console.log('Player loaded');
-  },
-  undefined,
-  (err) => console.error(err)
-);
-
-// ===== SIMPLE GROUND =====
-const groundGeo = new THREE.PlaneGeometry(100, 100);
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x3a7d44 });
-const ground = new THREE.Mesh(groundGeo, groundMat);
-ground.rotation.x = -Math.PI / 2;
-ground.position.y = 0;
-scene.add(ground);
 
 // ===== CONTROLS =====
 const keys = {};
-document.addEventListener('keydown', (e) => (keys[e.key.toLowerCase()] = true));
-document.addEventListener('keyup', (e) => (keys[e.key.toLowerCase()] = false));
 
-// Pointer lock (mouse look)
-document.body.addEventListener('click', () => {
-  document.body.requestPointerLock();
-});
-
-let yaw = 0;
-let pitch = 0;
-
-document.addEventListener('mousemove', (e) => {
-  if (document.pointerLockElement !== document.body) return;
-
-  yaw -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-});
-
-// ===== ANIMATION LOOP =====
-function animate() {
-  requestAnimationFrame(animate);
-
-  if (player) {
-  // ===== GRAVITY =====
-  velocityY += gravity;
-  player.position.y += velocityY;
-
-  // Ground collision
-  if (player.position.y <= groundY) {
-    player.position.y = groundY;
-    velocityY = 0;
-    isOnGround = true;
-  } else {
-    isOnGround = false;
-  }
-
-  // ===== CAMERA FOLLOW =====
-  camera.position.x = player.position.x;
-  camera.position.y = player.position.y + 1.6;
-  camera.position.z = player.position.z;
-
-  camera.rotation.set(pitch, yaw, 0);
-
-  // ===== MOVEMENT =====
-  const speed = 0.05;
-  const forward = new THREE.Vector3(
-    Math.sin(yaw),
-    0,
-    Math.cos(yaw)
-  );
-  const right = new THREE.Vector3(
-    Math.sin(yaw + Math.PI / 2),
-    0,
-    Math.cos(yaw + Math.PI / 2)
-  );
-
-  if (keys['w']) player.position.addScaledVector(forward, speed);
-  if (keys['s']) player.position.addScaledVector(forward, -speed);
-  if (keys['a']) player.position.addScaledVector(right, -speed);
-  if (keys['d']) player.position.addScaledVector(right, speed);
-
-  // Face movement direction
-  player.rotation.y = yaw;
-}
-    // Camera follows player
-    camera.position.x = player.position.x;
-    camera.position.y = player.position.y + 1.6;
-    camera.position.z = player.position.z;
-
-    camera.rotation.set(pitch, yaw, 0);
-
-    const speed = 0.05;
-    const forward = new THREE.Vector3(
-      Math.sin(yaw),
-      0,
-      Math.cos(yaw)
-    );
-    const right = new THREE.Vector3(
-      Math.sin(yaw + Math.PI / 2),
-      0,
-      Math.cos(yaw + Math.PI / 2)
-    );
-
-    if (keys['w']) player.position.addScaledVector(forward, speed);
-    if (keys['s']) player.position.addScaledVector(forward, -speed);
-    if (keys['a']) player.position.addScaledVector(right, -speed);
-    if (keys['d']) player.position.addScaledVector(right, speed);
-
-    document.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', (e) => {
   keys[e.key.toLowerCase()] = true;
 
   // Jump
@@ -165,18 +74,69 @@ function animate() {
   }
 });
 
-    // Rotate player body to face movement direction
-    player.rotation.y = yaw;
+document.addEventListener('keyup', (e) => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+// Mouse look
+let yaw = 0;
+let pitch = 0;
+
+document.addEventListener('mousemove', (e) => {
+  if (!gameStarted) return;
+
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+});
+
+// ===== GAME LOOP =====
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (!gameStarted || !player) {
+    renderer.render(scene, camera);
+    return;
   }
+
+  // ---- GRAVITY ----
+  velocityY += gravity;
+  player.position.y += velocityY;
+
+  if (player.position.y <= 0) {
+    player.position.y = 0;
+    velocityY = 0;
+    isOnGround = true;
+  }
+
+  // ---- MOVEMENT ----
+  const speed = 0.05;
+  const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const right = new THREE.Vector3(Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
+
+  if (keys['w']) player.position.addScaledVector(forward, speed);
+  if (keys['s']) player.position.addScaledVector(forward, -speed);
+  if (keys['a']) player.position.addScaledVector(right, -speed);
+  if (keys['d']) player.position.addScaledVector(right, speed);
+
+  player.rotation.y = yaw;
+
+  // ---- CAMERA ----
+  camera.position.set(
+    player.position.x,
+    player.position.y + 1.6,
+    player.position.z
+  );
+  camera.rotation.set(pitch, yaw, 0);
 
   renderer.render(scene, camera);
 }
 
 animate();
 
-// ===== RESIZE FIX =====
+// ===== RESIZE =====
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.aspect = canvas.clientWidth / canvas.clientHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
 });
