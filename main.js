@@ -13,7 +13,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 1.6, 5);
+camera.position.set(0, 3, 8);
 
 // ===== MENU =====
 const menu = document.getElementById("menu");
