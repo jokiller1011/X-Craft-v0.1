@@ -1,6 +1,6 @@
-// ================= BASIC SETUP =================
+// ================= SCENE + RENDERER =================
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb); // sky blue
+scene.background = new THREE.Color(0x87ceeb);
 
 const canvas = document.getElementById("game");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -20,15 +20,14 @@ const menu = document.getElementById("menu");
 const startBtn = document.getElementById("start");
 let gameStarted = false;
 
-startBtn.addEventListener("click", () => {
+startBtn.onclick = () => {
   menu.style.display = "none";
   gameStarted = true;
   document.body.requestPointerLock();
-});
+};
 
 // ================= LIGHTING =================
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-
 const sun = new THREE.DirectionalLight(0xffffff, 1);
 sun.position.set(10, 20, 10);
 scene.add(sun);
@@ -46,19 +45,22 @@ const sandTex = texLoader.load("textures/sand.png");
   t.minFilter = THREE.NearestFilter;
 });
 
-// ================= BLOCK FACTORY =================
+// ================= BLOCK SYSTEM =================
+const blocks = [];
+const raycaster = new THREE.Raycaster();
+
 function createBlock(type, x, y, z) {
   const geo = new THREE.BoxGeometry(1, 1, 1);
   let mat;
 
   if (type === "grass") {
     mat = [
-      new THREE.MeshStandardMaterial({ map: grassSide }), // right
-      new THREE.MeshStandardMaterial({ map: grassSide }), // left
-      new THREE.MeshStandardMaterial({ map: grassTop }),  // top
-      new THREE.MeshStandardMaterial({ map: dirtTex }),   // bottom
-      new THREE.MeshStandardMaterial({ map: grassSide }), // front
-      new THREE.MeshStandardMaterial({ map: grassSide })  // back
+      new THREE.MeshStandardMaterial({ map: grassSide }),
+      new THREE.MeshStandardMaterial({ map: grassSide }),
+      new THREE.MeshStandardMaterial({ map: grassTop }),
+      new THREE.MeshStandardMaterial({ map: dirtTex }),
+      new THREE.MeshStandardMaterial({ map: grassSide }),
+      new THREE.MeshStandardMaterial({ map: grassSide })
     ];
   } else if (type === "dirt") {
     mat = new THREE.MeshStandardMaterial({ map: dirtTex });
@@ -68,15 +70,38 @@ function createBlock(type, x, y, z) {
 
   const block = new THREE.Mesh(geo, mat);
   block.position.set(x, y, z);
+  block.userData.type = type;
+
   scene.add(block);
+  blocks.push(block);
 }
 
-// ================= WORLD GENERATION =================
+// ================= WORLD =================
 for (let x = -10; x <= 10; x++) {
   for (let z = -10; z <= 10; z++) {
     createBlock("grass", x, 0, z);
   }
 }
+
+// ================= INVENTORY =================
+const inventory = {
+  grass: 10,
+  dirt: 10,
+  sand: 10
+};
+let selectedBlock = "grass";
+
+// ================= HUD =================
+const hud = document.createElement("div");
+hud.style.position = "fixed";
+hud.style.bottom = "20px";
+hud.style.left = "50%";
+hud.style.transform = "translateX(-50%)";
+hud.style.color = "white";
+hud.style.fontFamily = "monospace";
+hud.style.background = "rgba(0,0,0,0.5)";
+hud.style.padding = "8px";
+document.body.appendChild(hud);
 
 // ================= PLAYER =================
 let player;
@@ -99,16 +124,13 @@ loader.load("models/Chest.glb", gltf => {
 
 // ================= CONTROLS =================
 const keys = {};
-
 document.addEventListener("keydown", e => {
   keys[e.key.toLowerCase()] = true;
-  if (e.code === "Space") keys.space = true;
+  if (e.key === "1") selectedBlock = "grass";
+  if (e.key === "2") selectedBlock = "dirt";
+  if (e.key === "3") selectedBlock = "sand";
 });
-
-document.addEventListener("keyup", e => {
-  keys[e.key.toLowerCase()] = false;
-  if (e.code === "Space") keys.space = false;
-});
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
 // ================= MOUSE LOOK =================
 let yaw = 0;
@@ -116,7 +138,6 @@ let pitch = 0;
 
 document.addEventListener("mousemove", e => {
   if (document.pointerLockElement !== document.body) return;
-
   yaw -= e.movementX * 0.002;
   pitch -= e.movementY * 0.002;
   pitch = Math.max(-1.5, Math.min(1.5, pitch));
@@ -128,6 +149,37 @@ const gravity = -0.015;
 const jumpPower = 0.35;
 let onGround = false;
 
+// ================= BLOCK BREAK / PLACE =================
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+document.addEventListener("mousedown", e => {
+  if (!gameStarted || !player) return;
+
+  raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+  const hits = raycaster.intersectObjects(blocks);
+  if (!hits.length) return;
+
+  const hit = hits[0];
+  const block = hit.object;
+
+  // LEFT CLICK = BREAK
+  if (e.button === 0) {
+    scene.remove(block);
+    blocks.splice(blocks.indexOf(block), 1);
+    inventory[block.userData.type]++;
+  }
+
+  // RIGHT CLICK = PLACE
+  if (e.button === 2 && inventory[selectedBlock] > 0) {
+    const pos = block.position.clone().add(hit.face.normal);
+    pos.x = Math.round(pos.x);
+    pos.y = Math.round(pos.y);
+    pos.z = Math.round(pos.z);
+    createBlock(selectedBlock, pos.x, pos.y, pos.z);
+    inventory[selectedBlock]--;
+  }
+});
+
 // ================= GAME LOOP =================
 function animate() {
   requestAnimationFrame(animate);
@@ -138,7 +190,6 @@ function animate() {
   }
 
   if (player) {
-    // Gravity
     velocityY += gravity;
     player.position.y += velocityY;
 
@@ -148,13 +199,11 @@ function animate() {
       onGround = true;
     }
 
-    // Jump
-    if (keys.space && onGround) {
+    if (keys[" "] && onGround) {
       velocityY = jumpPower;
       onGround = false;
     }
 
-    // Movement
     const speed = 0.06;
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const right = new THREE.Vector3(Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
@@ -164,16 +213,17 @@ function animate() {
     if (keys.a) player.position.addScaledVector(right, -speed);
     if (keys.d) player.position.addScaledVector(right, speed);
 
-    // Camera follow
-    camera.position.set(
-      player.position.x,
-      player.position.y + 1.6,
-      player.position.z
-    );
+    camera.position.set(player.position.x, player.position.y + 1.6, player.position.z);
     camera.rotation.set(pitch, yaw, 0);
-
     player.rotation.y = yaw;
   }
+
+  hud.innerHTML = `
+[1] Grass: ${inventory.grass}
+[2] Dirt: ${inventory.dirt}
+[3] Sand: ${inventory.sand}
+<br>Selected: ${selectedBlock}
+`;
 
   renderer.render(scene, camera);
 }
